@@ -1,10 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/screens/edit_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class ProfilePage extends StatelessWidget {
+import 'edit_profile.dart';
+import 'product_input_page.dart';
+
+class ProfilePage extends StatefulWidget {
   final VoidCallback onLogout;
 
   const ProfilePage({super.key, required this.onLogout});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String name = "Loading...";
+  String category = "";
+  String location = "";
+  String email = "";
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  // 💾 LOAD DATA
+  Future<void> loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      name = prefs.getString("name") ?? "Tech Startup Inc.";
+      category = prefs.getString("category") ?? "Technology & Software";
+      location = prefs.getString("location") ?? "San Francisco, CA";
+      email = prefs.getString("email") ?? "john@techstartup.com";
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +59,6 @@ class ProfilePage extends StatelessWidget {
 
             const Spacer(),
 
-            // 🔴 LOGOUT BUTTON (BOTTOM)
             _logoutButton(context),
           ],
         ),
@@ -36,6 +66,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  // 👤 PROFILE CARD
   Widget _profileCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -43,10 +74,7 @@ class ProfilePage extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-          )
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -62,30 +90,39 @@ class ProfilePage extends StatelessWidget {
                 ),
                 child: const Icon(Icons.business, color: Colors.white),
               ),
+
               const SizedBox(width: 12),
-              const Column(
+
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Tech Startup Inc.",
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
+                    name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  Text("Premium Account",
-                      style: TextStyle(color: Colors.grey)),
+                  const Text(
+                    "Premium Account",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ],
-              )
+              ),
             ],
           ),
+
           const SizedBox(height: 16),
-          _infoRow(Icons.label, "Category", "Technology & Software"),
-          _infoRow(Icons.location_on, "Location", "San Francisco, CA"),
-          _infoRow(Icons.person, "Account Owner", "john@techstartup.com"),
+
+          _infoRow(Icons.label, "Category", category),
+          _infoRow(Icons.location_on, "Location", location),
+          _infoRow(Icons.person, "Email", email),
         ],
       ),
     );
   }
 
+  // ℹ️ INFO ROW
   Widget _infoRow(IconData icon, String title, String value) {
     return Container(
       margin: const EdgeInsets.only(top: 10),
@@ -101,18 +138,25 @@ class ProfilePage extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 
+  // ⚙️ SETTINGS
   Widget _settingsCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -122,24 +166,36 @@ class ProfilePage extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // ✏️ EDIT PROFILE
           _settingsItem(
-            icon: Icons.settings,
+            icon: Icons.edit,
             title: "Edit Profile",
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EditProfilePage()),
+              );
+
+              // 🔥 ALWAYS reload after coming back
+              if (result == true || result == null) {
+                loadProfile();
+              }
+            },
+          ),
+
+          const Divider(),
+
+          // 📥 INPUT DATA
+          _settingsItem(
+            icon: Icons.input,
+            title: "Input Data",
+            subtitle: "Enter product data for AI analysis",
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const EditProfilePage(),
-                ),
+                MaterialPageRoute(builder: (_) => const ProductInputPage()),
               );
             },
-          ),
-          const Divider(),
-          _settingsItem(
-            icon: Icons.upload_file,
-            title: "Upload Data",
-            subtitle: "Import CSV files for analysis",
-            onTap: () {},
           ),
         ],
       ),
@@ -161,7 +217,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  // 🔴 LOGOUT BUTTON UI
+  // 🔴 LOGOUT
   Widget _logoutButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
@@ -175,7 +231,7 @@ class ProfilePage extends StatelessWidget {
         ),
         icon: const Icon(Icons.logout),
         label: const Text("Logout"),
-        onPressed: onLogout,
+        onPressed: widget.onLogout,
       ),
     );
   }

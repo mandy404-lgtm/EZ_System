@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dashboard.dart';
+
+import 'product_input_page.dart';
 import 'analytics.dart';
 import 'alerts.dart';
 import 'profile.dart';
@@ -16,15 +17,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int index = 0;
 
-  
   @override
   Widget build(BuildContext context) {
+
     final pages = [
-    Dashboard(),
-    Analytics(),
-    Alerts(),
-    ProfilePage(onLogout: widget.onLogout),
-  ];
+      const ProductInputPage(), // ✅ INPUT FIRST (IMPORTANT)
+       Analytics(),
+       Alerts(),
+      ProfilePage(onLogout: widget.onLogout),
+    ];
 
     return Scaffold(
       backgroundColor: const Color(0xfff5f6f8),
@@ -43,10 +44,11 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           ],
         ),
+
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _nav(Icons.home, "Home", 0),
+            _nav(Icons.input, "Input", 0),       // 🔥 changed
             _nav(Icons.analytics, "Analytics", 1),
             _nav(Icons.warning, "Alerts", 2),
             _nav(Icons.person, "Profile", 3),
@@ -64,8 +66,17 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: selected ? Colors.green : Colors.grey),
-          Text(label),
+          Icon(
+            icon,
+            color: selected ? Colors.green : Colors.grey,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.green : Colors.grey,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
