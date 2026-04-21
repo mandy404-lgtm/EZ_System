@@ -15,53 +15,74 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool isSignUp = false;
 
+  final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final businessController = TextEditingController();
+  final regionController = TextEditingController();
 
   void handleAuth() async {
-  print("LOGIN CLICKED");
-
-  try {
-    final res = await http.post(
-      Uri.parse("http://10.0.2.2:8000/auth/login"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "email": emailController.text.trim(),
-        "password": passwordController.text.trim(),
-      }),
-    );
-
-    print("STATUS: ${res.statusCode}");
-    print("BODY: ${res.body}");
-
-    if (res.statusCode != 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Server error")),
-      );
-      return;
-    }
-
-    final data = jsonDecode(res.body);
-
-    if (data["user_id"] != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt("user_id", data["user_id"]);
-
-      widget.onLogin();
+    if (isSignUp) {
+      // Register
+      try {
+        final res = await http.post(
+          Uri.parse("http://10.0.2.2:8000/auth/register"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "name": nameController.text.trim(),
+            "email": emailController.text.trim(),
+            "password": passwordController.text.trim(),
+            "category": businessController.text.trim(),
+          }),
+        );
+        if (res.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Registration successful")),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Registration failed")),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid login")),
-      );
+      // Login
+      try {
+        final res = await http.post(
+          Uri.parse("http://10.0.2.2:8000/auth/login"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "email": emailController.text.trim(),
+            "password": passwordController.text.trim(),
+          }),
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data["user_id"] != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setInt("user_id", data["user_id"]);
+            widget.onLogin();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Invalid login")),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Server error")),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     }
-
-  } catch (e) {
-    print("ERROR: $e");
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error: $e")),
-    );
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -105,14 +126,14 @@ class _AuthScreenState extends State<AuthScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black12,
                         blurRadius: 20,
                       )
                     ],
                   ),
                   child: Column(
                     children: [
-                      // Toggle
+                      // TOGGLE
                       Row(
                         children: [
                           Expanded(
@@ -132,7 +153,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: TextButton(
                               onPressed: () => setState(() => isSignUp = true),
                               child: Text(
-                                "Sign Up",
+                                "Register",
                                 style: TextStyle(
                                   color:
                                       isSignUp ? Colors.green : Colors.grey,
@@ -144,6 +165,21 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
 
                       const SizedBox(height: 10),
+
+                      // NAME (REGISTER ONLY)
+                      if (isSignUp)
+                        Column(
+                          children: [
+                            TextField(
+                              controller: nameController,
+                              decoration: const InputDecoration(
+                                labelText: "Full Name",
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                        ),
 
                       TextField(
                         controller: emailController,
@@ -163,6 +199,28 @@ class _AuthScreenState extends State<AuthScreen> {
                           border: OutlineInputBorder(),
                         ),
                       ),
+
+                      // BUSINESS NAME (REGISTER ONLY)
+                      if (isSignUp) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: businessController,
+                          decoration: const InputDecoration(
+                            labelText: "Business Name",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        TextField(
+                          controller: regionController,
+                          decoration: const InputDecoration(
+                            labelText: "Region",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 20),
 
