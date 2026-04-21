@@ -1,97 +1,154 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:frontend/models/product.dart';
+import 'package:http/http.dart' as http;
+import '../services/user_service.dart';
 
+class Dashboard extends StatefulWidget {
+  const Dashboard({super.key});
 
-class Dashboard extends StatelessWidget {
-  final ProductData product;
+  @override
+  State<Dashboard> createState() => _DashboardState();
+}
 
-  const Dashboard({super.key, required this.product});
+class _DashboardState extends State<Dashboard> {
+  late Future<Map<String, dynamic>> dashboardData;
+
+  final String baseUrl = "http://10.0.2.2:8000";
+
+  @override
+  void initState() {
+    super.initState();
+    dashboardData = fetchDashboard();
+  }
+
+  // 📡 FETCH DATA FROM API
+  Future<Map<String, dynamic>> fetchDashboard() async {
+
+  final userId = await UserService.getUserId();
+
+  final res = await http.get(
+    Uri.parse("http://10.0.2.2:8000/dashboard/$userId"),
+  );
+
+  return jsonDecode(res.body);
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff5f6f8),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
 
-            const SizedBox(height: 20),
+      appBar: AppBar(
+        title: const Text("Business Overview"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
 
-            const Text(
-              "Business Overview",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: dashboardData,
+        builder: (context, snapshot) {
 
-            const SizedBox(height: 20),
+          // 🔄 LOADING
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            // 💰 REVENUE
-            _card(
-              "Total Revenue",
-              "RM ${product.revenue.toStringAsFixed(2)}",
-              Icons.attach_money,
-              Colors.green,
-            ),
+          // ❌ ERROR
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Error: ${snapshot.error}",
+                style: const TextStyle(color: Colors.red),
+              ),
+            );
+          }
 
-            const SizedBox(height: 12),
+          final data = snapshot.data!;
 
-            Row(
+          double revenue = data['revenue']?.toDouble() ?? 0;
+          double cost = data['cost']?.toDouble() ?? 0;
+          double profit = data['profit']?.toDouble() ?? 0;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _card(
-                    "Profit",
-                    "RM ${product.profit.toStringAsFixed(2)}",
-                    Icons.trending_up,
-                    Colors.blue,
-                  ),
+
+                const SizedBox(height: 10),
+
+                // 💰 REVENUE CARD
+                _card(
+                  "Total Revenue",
+                  "RM ${revenue.toStringAsFixed(2)}",
+                  Icons.attach_money,
+                  Colors.green,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _card(
-                    "Stock",
-                    "${product.remainingStock} units",
-                    Icons.inventory_2,
-                    Colors.orange,
-                  ),
+
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _card(
+                        "Profit",
+                        "RM ${profit.toStringAsFixed(2)}",
+                        Icons.trending_up,
+                        Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _card(
+                        "Cost",
+                        "RM ${cost.toStringAsFixed(2)}",
+                        Icons.money_off,
+                        Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  "AI Insights",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 10),
+
+                // 🧠 INSIGHTS (simple logic for now)
+                _aiCard(
+                  "Profit Insight",
+                  profit > 0
+                      ? "Your business is profitable. Keep optimizing pricing."
+                      : "You are currently at a loss. Consider reducing costs.",
+                  Colors.green,
+                ),
+
+                _aiCard(
+                  "Revenue Insight",
+                  "Total revenue generated is RM ${revenue.toStringAsFixed(2)}.",
+                  Colors.blue,
+                ),
+
+                _aiCard(
+                  "Cost Insight",
+                  "Total cost incurred is RM ${cost.toStringAsFixed(2)}.",
+                  Colors.orange,
                 ),
               ],
             ),
-
-            const SizedBox(height: 20),
-
-            const Text(
-              "AI Insights",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            _aiCard(
-              "Pricing Insight",
-              "Your pricing vs cost shows ${(product.price - product.cost).toStringAsFixed(2)} margin per unit.",
-              Colors.green,
-            ),
-
-            _aiCard(
-              "Stock Insight",
-              product.remainingStock < 50
-                  ? "Low stock warning: consider restocking soon."
-                  : "Stock level is healthy.",
-              Colors.orange,
-            ),
-
-            _aiCard(
-              "Revenue Insight",
-              "Based on sales, total revenue generated is RM ${product.revenue.toStringAsFixed(2)}.",
-              Colors.blue,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
+  // 📦 CARD UI
   Widget _card(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -120,6 +177,7 @@ class Dashboard extends StatelessWidget {
     );
   }
 
+  // 🧠 AI CARD
   Widget _aiCard(String title, String desc, Color color) {
     return Container(
       margin: const EdgeInsets.only(top: 10),

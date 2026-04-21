@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback onLogin;
@@ -18,19 +19,47 @@ class _AuthScreenState extends State<AuthScreen> {
   final passwordController = TextEditingController();
 
   void handleAuth() async {
-  final res = await http.post(
-    Uri.parse("http://10.0.2.2:8000/auth/login"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({
-      "email": emailController.text,
-      "password": passwordController.text,
-    }),
-  );
+  print("LOGIN CLICKED");
 
-  final data = jsonDecode(res.body);
+  try {
+    final res = await http.post(
+      Uri.parse("http://10.0.2.2:8000/auth/login"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": emailController.text.trim(),
+        "password": passwordController.text.trim(),
+      }),
+    );
 
-  if (data["error"] == null) {
-    widget.onLogin();
+    print("STATUS: ${res.statusCode}");
+    print("BODY: ${res.body}");
+
+    if (res.statusCode != 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Server error")),
+      );
+      return;
+    }
+
+    final data = jsonDecode(res.body);
+
+    if (data["user_id"] != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt("user_id", data["user_id"]);
+
+      widget.onLogin();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid login")),
+      );
+    }
+
+  } catch (e) {
+    print("ERROR: $e");
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error: $e")),
+    );
   }
 }
 

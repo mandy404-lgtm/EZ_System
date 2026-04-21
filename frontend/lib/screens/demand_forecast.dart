@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/user_service.dart';
 
 class ForecastScreen extends StatefulWidget {
   @override
@@ -20,12 +21,18 @@ class _ForecastScreenState extends State<ForecastScreen> {
   }
 
   Future<void> fetchData() async {
-    final res = await http.get(Uri.parse("$baseUrl/demand-forecast"));
-    setState(() {
-      data = jsonDecode(res.body);
-      loading = false;
-    });
-  }
+
+  final userId = await UserService.getUserId();
+
+  final res = await http.get(
+    Uri.parse("http://10.0.2.2:8000/demand-forecast?user_id=$userId"),
+  );
+
+  setState(() {
+    data = jsonDecode(res.body);
+    loading = false;
+  });
+}
 
   @override
   Widget build(BuildContext context) {

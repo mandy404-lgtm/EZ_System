@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../services/user_service.dart';
 import 'edit_profile.dart';
 import 'product_input_page.dart';
 
@@ -231,7 +231,10 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         icon: const Icon(Icons.logout),
         label: const Text("Logout"),
-        onPressed: widget.onLogout,
+        onPressed: () async {
+          await UserService.clearUser();
+          widget.onLogout();
+        },
       ),
     );
   }

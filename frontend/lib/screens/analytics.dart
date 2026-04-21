@@ -1,93 +1,151 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:frontend/services/user_service.dart';
+import 'package:http/http.dart' as http;
 
-class Analytics extends StatelessWidget {
+class Analytics extends StatefulWidget {
   const Analytics({super.key});
 
-  // 🔥 Dummy AI OUTPUT (later replace with Z.AI GLM response)
-  final String recommendation =
-      "Reduce selling price to RM69 or introduce bundle offer to increase sales volume.";
+  @override
+ State<Analytics> createState() => _AnalyticsState();
+}
 
-  final String explanation =
-      "Your product is priced 15% higher than competitors. Demand is decreasing due to market competition and inflation pressure on consumers.";
+class _AnalyticsState extends State<Analytics> {
+  final String baseUrl = "http://10.0.2.2:8000";
 
-  final String tradeOff =
-      "Option 1: Reduce price → +18% sales, -5% profit margin\n"
-      "Option 2: Keep price → stable margin, but -12% sales risk\n"
-      "Option 3: Bundle offer → balanced profit & demand";
+  late Future<Map<String, dynamic>> aiData;
 
-  final String forecast =
-      "Next 7 days forecast:\n"
-      "• Sales: +12% if price reduced\n"
-      "• Demand: increasing during weekend peak\n"
-      "• Stock risk: moderate overstock if no action taken";
+  @override
+  void initState() {
+    super.initState();
+    aiData = getAI();
+  }
+
+  // 📡 CALL AI API
+  Future<Map<String, dynamic>> getAI() async {
+
+  final userId = await UserService.getUserId();
+
+  final res = await http.post(
+    Uri.parse("http://10.0.2.2:8000/ai/recommendation"),
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode({
+      "user_id": userId
+    }),
+  );
+
+  return jsonDecode(res.body);
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff5f6f8),
+
       appBar: AppBar(
         title: const Text("AI Decision Engine"),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
 
-            const Text(
-              "Z.AI GLM Business Intelligence",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: aiData,
+        builder: (context, snapshot) {
+
+          // 🔄 LOADING
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // ❌ ERROR
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Error: ${snapshot.error}",
+                style: const TextStyle(color: Colors.red),
+              ),
+            );
+          }
+
+          final data = snapshot.data!;
+
+          final recommendation = data["recommendation"] ?? "No recommendation";
+          final explanation = data["explanation"] ?? "No explanation";
+          final tradeOff = data["trade_off"] ?? "No trade-off data";
+          final forecast = data["forecast"] ?? "No forecast available";
+          final confidence = data["confidence"] ?? 0;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                const Text(
+                  "Z.AI GLM Business Intelligence",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 💡 RECOMMENDATION
+                _aiCard(
+                  title: "Recommendation",
+                  content: recommendation,
+                  icon: Icons.lightbulb,
+                  color: Colors.green,
+                ),
+
+                const SizedBox(height: 12),
+
+                // 🧠 EXPLANATION
+                _aiCard(
+                  title: "Explanation",
+                  content: explanation,
+                  icon: Icons.psychology,
+                  color: Colors.blue,
+                ),
+
+                const SizedBox(height: 12),
+
+                // ⚖️ TRADE OFF
+                _aiCard(
+                  title: "Trade-Off Analysis",
+                  content: tradeOff,
+                  icon: Icons.balance,
+                  color: Colors.orange,
+                ),
+
+                const SizedBox(height: 12),
+
+                // 🔮 FORECAST
+                _aiCard(
+                  title: "Forecast",
+                  content: forecast,
+                  icon: Icons.trending_up,
+                  color: Colors.purple,
+                ),
+
+                const SizedBox(height: 12),
+
+                // 🎯 CONFIDENCE
+                _aiCard(
+                  title: "Confidence Score",
+                  content: "${(confidence * 100).toStringAsFixed(1)}%",
+                  icon: Icons.verified,
+                  color: Colors.teal,
+                ),
+              ],
             ),
-
-            const SizedBox(height: 20),
-
-            // 💡 RECOMMENDATION
-            _aiCard(
-              title: "Recommendation",
-              content: recommendation,
-              icon: Icons.lightbulb,
-              color: Colors.green,
-            ),
-
-            const SizedBox(height: 12),
-
-            // 🧠 EXPLANATION
-            _aiCard(
-              title: "Explanation",
-              content: explanation,
-              icon: Icons.psychology,
-              color: Colors.blue,
-            ),
-
-            const SizedBox(height: 12),
-
-            // ⚖️ TRADE OFF
-            _aiCard(
-              title: "Trade-Off Analysis",
-              content: tradeOff,
-              icon: Icons.balance,
-              color: Colors.orange,
-            ),
-
-            const SizedBox(height: 12),
-
-            // 🔮 FORECAST
-            _aiCard(
-              title: "Forecast",
-              content: forecast,
-              icon: Icons.trending_up,
-              color: Colors.purple,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  // 🧠 AI CARD WIDGET
+  // 🧠 AI CARD UI
   Widget _aiCard({
     required String title,
     required String content,
@@ -97,9 +155,11 @@ class Analytics extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
+
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -107,9 +167,11 @@ class Analytics extends StatelessWidget {
           )
         ],
       ),
+
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -125,12 +187,15 @@ class Analytics extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
                 Text(
                   title,
                   style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.bold),
                 ),
+
                 const SizedBox(height: 6),
+
                 Text(
                   content,
                   style: const TextStyle(fontSize: 13, color: Colors.black87),

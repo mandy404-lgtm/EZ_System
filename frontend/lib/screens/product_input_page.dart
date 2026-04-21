@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/models/product.dart';
 import 'dashboard.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../services/user_service.dart';
 
 class ProductInputPage extends StatefulWidget {
   const ProductInputPage({super.key});
@@ -16,22 +18,27 @@ class _ProductInputPageState extends State<ProductInputPage> {
   final stockController = TextEditingController();
   final salesController = TextEditingController();
 
-  void submitData() {
-    final product = ProductData(
-      name: nameController.text,
-      cost: double.parse(costController.text),
-      price: double.parse(priceController.text),
-      stock: int.parse(stockController.text),
-      unitsSold: int.parse(salesController.text),
-    );
+  void submitData() async {
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Dashboard(product: product),
-      ),
-    );
-  }
+  final userId = await UserService.getUserId();
+
+  await http.post(
+    Uri.parse("http://10.0.2.2:8000/sales"),
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode({
+      "user_id": userId,
+      "product_name": nameController.text,
+      "cost": double.parse(costController.text),
+      "price": double.parse(priceController.text),
+      "units_sold": int.parse(salesController.text),
+    }),
+  );
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const Dashboard()),
+  );
+}
 
   Widget field(String label, TextEditingController c, TextInputType type) {
     return Padding(
