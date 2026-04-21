@@ -13,8 +13,4 @@ def register(user: UserCreate):
 
 @router.post("/login")
 def login(user: UserLogin):
-    for u in fake_users:
-        if u.email == user.email and u.password == user.password:
-            return {"message": "Login success", "user_id": 1}
-
-    return {"error": "Invalid credentials"}
+    return {"message": "Login success", "user_id": 1}

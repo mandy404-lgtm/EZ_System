@@ -48,73 +48,81 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   void saveProduct() {
-  final name = nameController.text.trim();
-  final cost = double.tryParse(costController.text);
-  final price = double.tryParse(priceController.text);
-  final stock = int.tryParse(stockController.text);
-  final sold = int.tryParse(soldController.text);
+    final name = nameController.text.trim();
+    final cost = double.tryParse(costController.text);
+    final price = double.tryParse(priceController.text);
+    final stock = int.tryParse(stockController.text);
+    final sold = int.tryParse(soldController.text);
 
-  // ❌ VALIDATION 1: empty fields
-  if (name.isEmpty || cost == null || price == null || stock == null || sold == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("❌ Invalid input: Please fill all fields correctly"),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  // ❌ VALIDATION 2: sold cannot exceed stock
-  if (sold > stock) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("❌ Units sold cannot be more than stock"),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  // ❌ VALIDATION 3: negative values
-  if (cost < 0 || price < 0 || stock < 0 || sold < 0) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("❌ Values cannot be negative"),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  final product = Product(
-    id: editingId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-    name: name,
-    cost: cost,
-    price: price,
-    stock: stock,
-    sold: sold,
-  );
-
-  setState(() {
-    if (editingId != null) {
-      products = products.map((p) => p.id == editingId ? product : p).toList();
-    } else {
-      products.add(product);
+    // ❌ VALIDATION 1: empty fields
+    if (name.isEmpty ||
+        cost == null ||
+        price == null ||
+        stock == null ||
+        sold == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Invalid input: Please fill all fields correctly"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
-  });
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(editingId != null
-          ? "✅ Product updated successfully"
-          : "✅ Product added successfully"),
-      backgroundColor: Colors.green,
-    ),
-  );
+    // ❌ VALIDATION 2: sold cannot exceed stock
+    if (sold > stock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Units sold cannot be more than stock"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-  resetForm();
-}
+    // ❌ VALIDATION 3: negative values
+    if (cost < 0 || price < 0 || stock < 0 || sold < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Values cannot be negative"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final product = Product(
+      id: editingId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name,
+      cost: cost,
+      price: price,
+      stock: stock,
+      sold: sold,
+    );
+
+    setState(() {
+      if (editingId != null) {
+        products = products
+            .map((p) => p.id == editingId ? product : p)
+            .toList();
+      } else {
+        products.add(product);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          editingId != null
+              ? "✅ Product updated successfully"
+              : "✅ Product added successfully",
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    resetForm();
+  }
 
   void editProduct(Product p) {
     setState(() {
@@ -178,31 +186,37 @@ class _ProductPageState extends State<ProductPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             /// 📦 FORM SECTION
             if (showForm)
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-
                       TextField(
                         controller: nameController,
-                        decoration: const InputDecoration(labelText: "Product Name"),
+                        decoration: const InputDecoration(
+                          labelText: "Product Name",
+                        ),
                       ),
 
                       TextField(
                         controller: costController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Cost Price"),
+                        decoration: const InputDecoration(
+                          labelText: "Cost Price",
+                        ),
                       ),
 
                       TextField(
                         controller: priceController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Selling Price"),
+                        decoration: const InputDecoration(
+                          labelText: "Selling Price",
+                        ),
                       ),
 
                       TextField(
@@ -214,7 +228,9 @@ class _ProductPageState extends State<ProductPage> {
                       TextField(
                         controller: soldController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Units Sold"),
+                        decoration: const InputDecoration(
+                          labelText: "Units Sold",
+                        ),
                       ),
 
                       const SizedBox(height: 10),
@@ -224,16 +240,18 @@ class _ProductPageState extends State<ProductPage> {
                           Expanded(
                             child: ElevatedButton(
                               onPressed: saveProduct,
-                              child: Text(editingId != null ? "Update" : "Save"),
+                              child: Text(
+                                editingId != null ? "Update" : "Save",
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
                           TextButton(
                             onPressed: resetForm,
                             child: const Text("Cancel"),
-                          )
+                          ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -242,21 +260,21 @@ class _ProductPageState extends State<ProductPage> {
             const SizedBox(height: 20),
 
             /// 📋 PRODUCT LIST
-            if (products.isEmpty)
-              const Text("No products yet"),
+            if (products.isEmpty) const Text("No products yet"),
 
             ...products.map((p) {
               final status = stockStatus(p.stock);
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
                       /// NAME + ACTIONS
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -272,21 +290,30 @@ class _ProductPageState extends State<ProductPage> {
                           Row(
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.green),
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors.green,
+                                ),
                                 onPressed: () => editProduct(p),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () => deleteProduct(p.id),
                               ),
                             ],
-                          )
+                          ),
                         ],
                       ),
 
                       /// STOCK STATUS
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: stockColor(status).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(10),
@@ -351,7 +378,7 @@ class _ProductPageState extends State<ProductPage> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
