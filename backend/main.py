@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from fastapi import FastAPI
 
 # import all route files
@@ -26,5 +25,3 @@ app.include_router(forecast_routes.router)  # no prefix
 @app.get("/")
 def root():
     return {"message": "EZ System API Running"}
-=======
->>>>>>> 2b11b5c212a31e8bcaabfdbdd2dc9714091abd9e
