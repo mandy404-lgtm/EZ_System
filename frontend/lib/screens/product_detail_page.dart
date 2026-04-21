@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 
 class ProductDetailPage extends StatelessWidget {
   const ProductDetailPage({super.key});
@@ -38,7 +37,6 @@ class ProductDetailPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             /// 📦 PRODUCT HEADER CARD
             _productHeader(product),
 
@@ -75,7 +73,6 @@ class ProductDetailPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-
             /// IMAGE
             Container(
               width: 70,
@@ -100,7 +97,10 @@ class ProductDetailPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue[100],
                       borderRadius: BorderRadius.circular(20),
@@ -148,10 +148,24 @@ class ProductDetailPage extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.6,
       children: [
-
-        _metricCard("Price", "\$${product["price"]}", Icons.attach_money, Colors.green),
-        _metricCard("Stock", "${product["stock"]}", Icons.inventory, Colors.blue),
-        _metricCard("Cost", "\$${product["cost"]}", Icons.trending_up, Colors.orange),
+        _metricCard(
+          "Price",
+          "\$${product["price"]}",
+          Icons.attach_money,
+          Colors.green,
+        ),
+        _metricCard(
+          "Stock",
+          "${product["stock"]}",
+          Icons.inventory,
+          Colors.blue,
+        ),
+        _metricCard(
+          "Cost",
+          "\$${product["cost"]}",
+          Icons.trending_up,
+          Colors.orange,
+        ),
         _metricCard("Sold", "${product["sold"]}", Icons.history, Colors.purple),
       ],
     );
@@ -167,7 +181,10 @@ class ProductDetailPage extends StatelessWidget {
           children: [
             Icon(icon, color: color),
             const Spacer(),
-            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             Text(
               value,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -187,7 +204,6 @@ class ProductDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
-
             Text(
               "Price & Cost Trend",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -247,7 +263,6 @@ class ProductDetailPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             _detailRow("SKU", "PRD-00001"),
             _detailRow("Category", product["category"]),
             _detailRow("Margin", "${product["margin"]}%"),

@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-<<<<<<< HEAD
 import '../services/user_service.dart';
-=======
->>>>>>> 2b11b5c212a31e8bcaabfdbdd2dc9714091abd9e
 import 'edit_profile.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -89,10 +86,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
           Text(
             name,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
 
           const SizedBox(height: 6),
@@ -113,8 +107,7 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          Text("$title: ",
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text("$title: ", style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(value),
         ],
       ),
@@ -138,9 +131,7 @@ class _ProfilePageState extends State<ProfilePage> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const EditProfilePage(),
-            ),
+            MaterialPageRoute(builder: (_) => const EditProfilePage()),
           );
 
           if (result == true) {

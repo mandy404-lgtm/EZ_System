@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 from sqlalchemy import text
-from db import get_engine
+from backend.db import get_engine
 
 engine = get_engine()
 

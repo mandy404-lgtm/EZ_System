@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from backend.Database.db import get_engine
+from backend.db import get_engine
 from backend.Database.load_data import load_data
 from backend.Database.feature_engineering import build_ai_summary
 import numpy as np

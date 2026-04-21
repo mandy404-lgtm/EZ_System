@@ -1,7 +1,4 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback onLogin;
@@ -21,67 +18,48 @@ class _AuthScreenState extends State<AuthScreen> {
   final businessController = TextEditingController();
   final regionController = TextEditingController();
 
-  void handleAuth() async {
+  void handleAuth() {
     if (isSignUp) {
-      // Register
-      try {
-        final res = await http.post(
-          Uri.parse("http://10.0.2.2:8000/auth/register"),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "name": nameController.text.trim(),
-            "email": emailController.text.trim(),
-            "password": passwordController.text.trim(),
-            "category": businessController.text.trim(),
-          }),
-        );
-        if (res.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Registration successful")),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Registration failed")),
-          );
-        }
-      } catch (e) {
+      // 🔥 REGISTER (LOCAL ONLY)
+      if (nameController.text.isEmpty ||
+          emailController.text.isEmpty ||
+          passwordController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
+          const SnackBar(content: Text("Please fill all required fields")),
         );
+        return;
       }
+
+      debugPrint("REGISTER:");
+      debugPrint("Name: ${nameController.text}");
+      debugPrint("Email: ${emailController.text}");
+      debugPrint("Business: ${businessController.text}");
+      debugPrint("Region: ${regionController.text}");
     } else {
-      // Login
-      try {
-        final res = await http.post(
-          Uri.parse("http://10.0.2.2:8000/auth/login"),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "email": emailController.text.trim(),
-            "password": passwordController.text.trim(),
-          }),
-        );
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          if (data["user_id"] != null) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt("user_id", data["user_id"]);
-            widget.onLogin();
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Invalid login")),
-            );
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Server error")),
-          );
-        }
-      } catch (e) {
+      // 🔥 LOGIN (LOCAL ONLY)
+      if (emailController.text.isEmpty || passwordController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
+          const SnackBar(content: Text("Enter email and password")),
         );
+        return;
       }
+
+      debugPrint("LOGIN:");
+      debugPrint("Email: ${emailController.text}");
     }
+
+    // simulate success login/register
+    widget.onLogin();
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    businessController.dispose();
+    regionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -124,7 +102,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
                         blurRadius: 20,
@@ -142,9 +120,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: Text(
                                 "Login",
                                 style: TextStyle(
-                                  color: !isSignUp
-                                      ? Colors.green
-                                      : Colors.grey,
+                                  color: !isSignUp ? Colors.green : Colors.grey,
                                 ),
                               ),
                             ),
@@ -155,8 +131,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: Text(
                                 "Register",
                                 style: TextStyle(
-                                  color:
-                                      isSignUp ? Colors.green : Colors.grey,
+                                  color: isSignUp ? Colors.green : Colors.grey,
                                 ),
                               ),
                             ),
@@ -166,21 +141,19 @@ class _AuthScreenState extends State<AuthScreen> {
 
                       const SizedBox(height: 10),
 
-                      // NAME (REGISTER ONLY)
-                      if (isSignUp)
-                        Column(
-                          children: [
-                            TextField(
-                              controller: nameController,
-                              decoration: const InputDecoration(
-                                labelText: "Full Name",
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                          ],
+                      // NAME
+                      if (isSignUp) ...[
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: "Full Name",
+                            border: OutlineInputBorder(),
+                          ),
                         ),
+                        const SizedBox(height: 10),
+                      ],
 
+                      // EMAIL
                       TextField(
                         controller: emailController,
                         decoration: const InputDecoration(
@@ -191,6 +164,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                       const SizedBox(height: 10),
 
+                      // PASSWORD
                       TextField(
                         controller: passwordController,
                         obscureText: true,
@@ -200,7 +174,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
 
-                      // BUSINESS NAME (REGISTER ONLY)
+                      // REGISTER FIELDS
                       if (isSignUp) ...[
                         const SizedBox(height: 10),
                         TextField(
@@ -210,9 +184,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             border: OutlineInputBorder(),
                           ),
                         ),
-
                         const SizedBox(height: 10),
-
                         TextField(
                           controller: regionController,
                           decoration: const InputDecoration(
