@@ -4,8 +4,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from pydantic import BaseModel
-from services.analysis_service import update_ai_summary_table
+from services.analysis_service import request_zai_analysis, update_ai_summary_table
 from pydantic import BaseModel
+from services.analysis_service import update_ai_summary_table, get_zai_intelligence
+
+
 
 # --- 1. PATH FIX ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -215,11 +218,12 @@ async def get_dashboard(user_id: str):
 # 修改售出：减去对应的数量
 @app.post("/sales/record")
 async def record_sale(data: dict):
-    qty = data.get('quantity', 1)  # 获取卖出的数量
+    # 强制转换类型，防止前端传过来的是字符串
+    qty = int(data.get('quantity', 1))  
     
     # ✅ 计算这一单的总售价和总成本
-    total_revenue = data['price'] * qty
-    total_cost = data['cost'] * qty
+    total_revenue = float(data['price']) * qty
+    total_cost = float(data['cost']) * qty
 
     with engine.begin() as conn:
         # 1. 扣除库存
@@ -228,21 +232,24 @@ async def record_sale(data: dict):
             WHERE product_id = :pid AND quantity >= :qty
         """), {"pid": data['product_id'], "qty": qty})
         
-        # 2. 记录销售：存入总价 (Total) 而不是单价 (Unit Price)
+        # 2. 核心修复：把 quantity (字段和参数) 加进去！
         conn.execute(text("""
-            INSERT INTO sales (user_id, product_id, selling_price, cost_price, sale_date)
-            VALUES (:uid, :pid, :price, :cost, NOW())
+            INSERT INTO sales (user_id, product_id, quantity, selling_price, cost_price, sale_date)
+            VALUES (:uid, :pid, :qty, :price, :cost, NOW())
         """), {
             "uid": data['user_id'], 
             "pid": data['product_id'], 
-            "price": total_revenue, # ✅ 这里现在存的是 16.0 (8 * 2)
-            "cost": total_cost      # ✅ 这里现在存的是 10.0 (5 * 2)
+            "qty": qty,              # 🌟 新增这一行
+            "price": total_revenue, 
+            "cost": total_cost      
         })
+
     u_id = data.get('user_id')
     p_id = data.get('product_id')
     if u_id and p_id:
         update_ai_summary_table(engine, u_id, p_id)
-    return {"status": "success"}
+        
+    return {"status": "success", "recorded_qty": qty}
 
 # 新增补货：直接增加库存
 @app.post("/products/restock")
@@ -306,7 +313,49 @@ async def get_business_alerts(user_id: str):
         print(f"Alert Logic Error: {e}")
         return []
     
-# --- 8. AI SUMMARY PIPELINE ---
+# --- 在 main.py 中整合 ZAI 调用 ---
+
+# --- 修改后的 trigger_ai_analysis 路由 ---
+@app.post("/analytics/trigger-ai/{user_id}/{product_id}")
+async def trigger_ai_analysis(user_id: str, product_id: str):
+    try:
+        # 1. 运行本地计算逻辑 (你刚刚发的代码)
+        # 它会计算销售额、转化率等，并更新数据库基础字段
+        updated_stats = update_ai_summary_table(engine, user_id, product_id)
+        
+        if not updated_stats:
+            raise HTTPException(status_code=404, detail="Product not found or failed to update")
+
+        # 2. 核心：发起 ZAI 深度分析并存回数据库
+        # 注意：这里直接传入 updated_stats 字典，避免再次查询数据库
+        ai_success = request_zai_analysis(engine, user_id, product_id, updated_stats)
+
+        # 3. 再次查询数据库，获取最新最全的结果（包含 AI 建议字段）返回给前端
+        with engine.connect() as conn:
+            final_data = conn.execute(text("""
+                SELECT * FROM ai_product_summary 
+                WHERE product_id = :pid AND user_id = :uid
+            """), {"pid": product_id, "uid": user_id}).mappings().first()
+
+        return {
+            "status": "success",
+            "data": {
+                "conversion_rate": final_data['conversion_rate'],
+                "total_sales": final_data['total_sales'],
+                "stock_status": final_data['stock_status'],
+                # 对应 Flutter 里的渲染字段
+                "ai_insight": final_data['ai_recommendation'],
+                "trade_off": final_data['trade_off_analysis'],
+                "ai_reasoning": final_data['glm_reasoning'],
+                "forecast": final_data['forecast_30d'],
+                "impact": final_data['impact_summary']
+            }
+        }
+
+    except Exception as e:
+        print(f"❌ Critical Pipeline Failure: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/analytics/sync/{user_id}")
 async def sync_analytics_data(user_id: str):
     success = update_ai_summary_table(engine, user_id)

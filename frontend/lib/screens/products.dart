@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
-import '../models/product.dart'; // ✅ Ensure this path is correct
+import '../models/product.dart';
 
 class ProductPage extends StatefulWidget {
   const ProductPage({super.key});
+
   @override
   State<ProductPage> createState() => _ProductPageState();
 }
@@ -12,30 +13,22 @@ class ProductPage extends StatefulWidget {
 class _ProductPageState extends State<ProductPage> {
   late Future<List<Product>> _productsFuture;
 
-  // Controllers for the Form
+  // 控制器
   final nameController = TextEditingController();
-  final costController = TextEditingController(); // ✅ 新增成本价控制器
+  final costController = TextEditingController();
   final priceController = TextEditingController();
   final stockController = TextEditingController();
-
-  // Controller and variable for Search
   final searchController = TextEditingController();
-  String searchQuery = "";
 
+  String searchQuery = "";
   String? editingId;
   bool showForm = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _refresh();
-  }
-
-  // Fetches data from API and returns it as a Future
-  Future<List<Product>> _fetchProducts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id') ?? "";
-    return await ApiService.getProducts(userId);
   }
 
   void _refresh() {
@@ -44,33 +37,42 @@ class _ProductPageState extends State<ProductPage> {
     });
   }
 
-  Future<void> handleSave() async {
+  Future<List<Product>> _fetchProducts() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? userId = prefs.getString('user_id'); // 获取当前登录的新 ID
+    final userId = prefs.getString('user_id') ?? "";
+    return await ApiService.getProducts(userId);
+  }
+
+  // ================= 核心：保存/更新产品 =================
+  Future<void> handleSave() async {
+    if (_isSaving) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final String? userId = prefs.getString('user_id');
 
     if (userId == null) {
-      _showError("User not logged in. Please re-login.");
+      _showError("User session expired. Please re-login.");
       return;
     }
 
+    final String name = nameController.text.trim();
     final double? cost = double.tryParse(costController.text.trim());
     final double? price = double.tryParse(priceController.text.trim());
     final int? stock = int.tryParse(stockController.text.trim());
 
-    if (cost == null ||
-        price == null ||
-        stock == null ||
-        nameController.text.isEmpty) {
-      _showError("Please fill all fields with valid data");
+    if (name.isEmpty || cost == null || price == null || stock == null) {
+      _showError("Please fill all fields with valid numbers");
       return;
     }
+
+    setState(() => _isSaving = true);
 
     final data = {
       "user_id": userId,
       "product_id": editingId ?? "P${DateTime.now().millisecondsSinceEpoch}",
-      "product_name": nameController.text.trim(),
-      "cost_price": cost, // ✅ 发送成本价
-      "selling_price": price, // ✅ 发送售价
+      "product_name": name,
+      "cost_price": cost,
+      "selling_price": price,
       "stock": stock,
     };
 
@@ -78,73 +80,26 @@ class _ProductPageState extends State<ProductPage> {
         ? await ApiService.updateProduct(data)
         : await ApiService.addProduct(data);
 
+    setState(() => _isSaving = false);
+
     if (success) {
       _refresh();
       setState(() {
         showForm = false;
         editingId = null;
       });
-      // 清空控制器
       _clearInputs();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Success: Product data synced")),
+      );
     } else {
-      _showError("Failed to save product. Check backend logs.");
+      _showError("Database sync failed.");
     }
   }
 
-  Future<void> handleDelete(String productId) async {
-    // 弹出确认对话框
-    bool confirm =
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Delete Product"),
-            content: const Text(
-              "Are you sure you want to delete this product? This action cannot be undone.",
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text(
-                  "Delete",
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (confirm) {
-      bool success = await ApiService.deleteProduct(productId);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Product deleted successfully")),
-        );
-        _refresh(); // 重新拉取数据，界面就会消失
-      } else {
-        _showError("Failed to delete product.");
-      }
-    }
-  }
-
-  void _clearInputs() {
-    nameController.clear();
-    priceController.clear();
-    stockController.clear();
-    costController.clear();
-  }
-
+  // ================= 快捷操作：售出与补货 =================
   Future<void> handleSaleAction(Product p) async {
-    final int? qty = await showQuantityDialog(
-      context,
-      "Sell Product",
-      "Confirm Sale",
-      Colors.green,
-    );
+    final int? qty = await showQuantityDialog(context, "Record Sale", "Confirm Sell", Colors.green);
     if (qty == null || qty <= 0) return;
 
     if (p.stock < qty) {
@@ -156,225 +111,113 @@ class _ProductPageState extends State<ProductPage> {
     final data = {
       "user_id": prefs.getString('user_id'),
       "product_id": p.id,
-      "quantity": qty, // ✅ 传给后端你卖了多少个
+      "quantity": qty,
       "price": p.price,
       "cost": p.cost,
     };
 
-    bool success = await ApiService.recordSale(data);
-    if (success) {
+    if (await ApiService.recordSale(data)) {
       _refresh();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Sold $qty units of ${p.name}")));
     }
-  }
-
-  Future<int?> showQuantityDialog(
-    BuildContext context,
-    String title,
-    String buttonText,
-    Color color,
-  ) async {
-    int quantity = 1;
-    final TextEditingController controller = TextEditingController(text: "1");
-
-    return showDialog<int>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        // 必须用 StatefulBuilder 才能在弹窗里刷新数字
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Text(title),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // 减号
-                    IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        color: Colors.red,
-                      ),
-                      onPressed: () {
-                        if (quantity > 1) {
-                          setDialogState(() {
-                            quantity--;
-                            controller.text = quantity.toString();
-                          });
-                        }
-                      },
-                    ),
-                    // 数字输入框
-                    SizedBox(
-                      width: 60,
-                      child: TextField(
-                        controller: controller,
-                        textAlign: TextAlign.center,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (val) {
-                          quantity = int.tryParse(val) ?? 1;
-                        },
-                      ),
-                    ),
-                    // 加号
-                    IconButton(
-                      icon: const Icon(
-                        Icons.add_circle_outline,
-                        color: Colors.green,
-                      ),
-                      onPressed: () {
-                        setDialogState(() {
-                          quantity++;
-                          controller.text = quantity.toString();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: color),
-                onPressed: () => Navigator.pop(context, quantity),
-                child: Text(
-                  buttonText,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   Future<void> handleRestock(Product p) async {
-    final int? qty = await showQuantityDialog(
-      context,
-      "Restock Inventory",
-      "Add Stock",
-      Colors.blue,
-    );
+    final int? qty = await showQuantityDialog(context, "Restock Inventory", "Add Units", Colors.blue);
     if (qty == null || qty <= 0) return;
 
-    final data = {
-      "product_id": p.id,
-      "adjustment": qty, // ✅ 增加的数量
-    };
-
-    bool success = await ApiService.updateStock(data); // 你需要在 ApiService 增加此方法
-    if (success) {
+    if (await ApiService.updateStock({"product_id": p.id, "adjustment": qty})) {
       _refresh();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Added $qty units to ${p.name}")));
     }
   }
 
+  // ================= UI 构建 =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text("Inventory"),
-        backgroundColor: Colors.green,
+        title: const Text("Stock Inventory"),
+        backgroundColor: Colors.green.shade800,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.green.shade800,
         onPressed: () {
           setState(() {
             showForm = !showForm;
-            if (!showForm) editingId = null; // Reset edit state if closing
+            if (!showForm) {
+              editingId = null;
+              _clearInputs();
+            }
           });
         },
-        child: Icon(showForm ? Icons.close : Icons.add),
+        child: Icon(showForm ? Icons.close : Icons.add, color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Search Bar
-            TextField(
-              controller: searchController,
-              decoration: const InputDecoration(
-                labelText: "Search products...",
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  searchQuery = value.toLowerCase();
-                });
-              },
-            ),
-            const SizedBox(height: 10),
-            if (showForm) _buildForm(),
-            const SizedBox(height: 20),
-            _buildList(),
-          ],
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          if (showForm) _buildForm(),
+          Expanded(child: _buildList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        controller: searchController,
+        decoration: InputDecoration(
+          hintText: "Search your products...",
+          prefixIcon: const Icon(Icons.search),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
         ),
+        onChanged: (val) => setState(() => searchQuery = val.toLowerCase()),
       ),
     );
   }
 
   Widget _buildForm() {
     return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Text(
-              editingId == null ? "Add New Product" : "Edit Product",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            Text(editingId == null ? "✨ Add New Product" : "📝 Edit Product",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 15),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Product Name")),
+            Row(
+              children: [
+                Expanded(child: TextField(controller: costController, decoration: const InputDecoration(labelText: "Cost (RM)"), keyboardType: TextInputType.number)),
+                const SizedBox(width: 15),
+                Expanded(child: TextField(controller: priceController, decoration: const InputDecoration(labelText: "Price (RM)"), keyboardType: TextInputType.number)),
+              ],
             ),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Product Name"),
-            ),
-
-            // ✅ 成本价输入框
-            TextField(
-              controller: costController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Cost Price (RM)",
-                hintText: "How much you paid",
-              ),
-            ),
-
-            // ✅ 售价输入框
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Selling Price (RM)",
-                hintText: "How much you sell",
-              ),
-            ),
-
-            TextField(
-              controller: stockController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "Initial Stock"),
-            ),
-            const SizedBox(height: 10),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: handleSave,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: const Text(
-                "Save Product",
-                style: TextStyle(color: Colors.white),
+            TextField(controller: stockController, decoration: const InputDecoration(labelText: "Current Stock"), keyboardType: TextInputType.number),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : handleSave,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade800,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isSaving
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("SYNC TO DATABASE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -387,75 +230,51 @@ class _ProductPageState extends State<ProductPage> {
     return FutureBuilder<List<Product>>(
       future: _productsFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No products yet. Click '+' to add."));
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Text("Error loading inventory: ${snapshot.error}"),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("No products found in database."));
-        }
-
-        final filteredList = snapshot.data!.where((p) {
-          return p.name.toLowerCase().contains(searchQuery);
-        }).toList();
-
-        if (filteredList.isEmpty) {
-          return const Center(child: Text("No products match your search."));
-        }
+        final list = snapshot.data!.where((p) => p.name.toLowerCase().contains(searchQuery)).toList();
 
         return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: filteredList.length,
+          padding: const EdgeInsets.all(16),
+          itemCount: list.length,
           itemBuilder: (context, index) {
-            final p = filteredList[index];
-            final profit = p.price - p.cost; // 假设你的 Product Model 有 cost 字段
+            final p = list[index];
+            final bool isLowStock = p.stock < 5;
+            final double profit = p.price - (p.cost ?? 0);
 
             return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               child: ListTile(
-                title: Text(p.name),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 4),
+                    Text("Price: RM ${p.price.toStringAsFixed(2)} | Profit: RM ${profit.toStringAsFixed(2)}"),
+                    const SizedBox(height: 2),
                     Text(
-                      "Cost: RM ${p.cost?.toStringAsFixed(2)} | Sell: RM ${p.price.toStringAsFixed(2)}",
-                    ),
-                    Text(
-                      "Profit/Unit: RM ${profit.toStringAsFixed(2)}",
+                      "Stock Level: ${p.stock}",
                       style: TextStyle(
-                        color: profit > 0 ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
+                        color: isLowStock ? Colors.red : Colors.green.shade700,
+                        fontWeight: isLowStock ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
-                    Text("Stock: ${p.stock}"),
                   ],
                 ),
-                // ✅ 所有的按钮都放在这一个 Row 的 children 列表里
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 1. 补货按钮
                     IconButton(
-                      icon: const Icon(Icons.add_business, color: Colors.blue),
-                      onPressed: () => handleRestock(p),
-                      tooltip: "Add Stock",
-                    ),
-                    // 2. 售出按钮
+                        icon: const Icon(Icons.add_box, color: Colors.blue),
+                        onPressed: () => handleRestock(p),
+                        tooltip: "Restock"),
                     IconButton(
-                      icon: const Icon(
-                        Icons.shopping_cart_checkout,
-                        color: Colors.green,
-                      ),
-                      onPressed: () => handleSaleAction(p),
-                      tooltip: "Record Sale",
-                    ),
-                    // 3. 编辑按钮
+                        icon: const Icon(Icons.sell, color: Colors.green),
+                        onPressed: () => handleSaleAction(p),
+                        tooltip: "Sell"),
                     IconButton(
                       icon: const Icon(Icons.edit, color: Colors.orange),
                       onPressed: () {
@@ -463,16 +282,15 @@ class _ProductPageState extends State<ProductPage> {
                           editingId = p.id;
                           nameController.text = p.name;
                           priceController.text = p.price.toString();
+                          costController.text = (p.cost ?? 0.0).toString();
                           stockController.text = p.stock.toString();
                           showForm = true;
                         });
                       },
                     ),
-                    // 4. 删除按钮
                     IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => handleDelete(p.id),
-                    ),
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => handleDelete(p.id)),
                   ],
                 ),
               ),
@@ -483,13 +301,62 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
+  // ================= 辅助工具方法 =================
+  void _clearInputs() {
+    nameController.clear();
+    costController.clear();
+    priceController.clear();
+    stockController.clear();
+  }
+
   void _showError(String message) {
-    if (!mounted) return; // 确保 context 还在
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating, // 让提示悬浮，更好看
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  Future<void> handleDelete(String productId) async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Product?"),
+        content: const Text("This data will be removed permanently."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm && await ApiService.deleteProduct(productId)) {
+      _refresh();
+    }
+  }
+
+  Future<int?> showQuantityDialog(BuildContext context, String title, String actionLabel, Color themeColor) async {
+    int quantity = 1;
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(icon: const Icon(Icons.remove), onPressed: () => setDialogState(() => quantity > 1 ? quantity-- : null)),
+              Text("$quantity", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              IconButton(icon: const Icon(Icons.add), onPressed: () => setDialogState(() => quantity++)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: themeColor),
+              onPressed: () => Navigator.pop(ctx, quantity),
+              child: Text(actionLabel, style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }

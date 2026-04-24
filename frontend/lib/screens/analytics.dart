@@ -1,178 +1,151 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class Analytics extends StatelessWidget {
+class Analytics extends StatefulWidget {
   const Analytics({super.key});
 
-  // ===================== MOCK DATA =====================
-  final double revenueBefore = 20000;
-  final double revenueAfter = 24000;
+  @override
+  State<Analytics> createState() => _AnalyticsState();
+}
 
-  final double profitBefore = 5000;
-  final double profitAfter = 10500;
+class _AnalyticsState extends State<Analytics> {
+  // ===================== 状态变量 =====================
+  bool _isLoading = false;
+  String recommendation = "Click 'Trigger AI' to analyze your business.";
+  String tradeOff = "Calculating...";
+  String reasoning = "Waiting for data analysis...";
+  String conversionRate = "0.0%";
+  String stockStatus = "Checking...";
 
-  final double costBefore = 15000;
-  final double costAfter = 13500;
+  // 建议：实际开发中通过构造函数传入这些 ID
+  final String productId = "P1777040303230"; 
+  final String userId = "U1776955390504";
 
-  final double timeBefore = 5; // hours per week
-  final double timeAfter = 0.5; // 30 mins
+  // ===================== API 调用 =====================
+  Future<void> _triggerAI() async {
+    setState(() => _isLoading = true);
 
-  // ===================== CALCULATIONS =====================
-  double get revenueGrowth =>
-      ((revenueAfter - revenueBefore) / revenueBefore) * 100;
+    try {
+      // 1. 调用后端接口。注意：确保 URL 与你 main.py 定义的路由一致
+      // 建议使用你的局域网 IP (如 192.168.x.x) 如果是在真机调试
+      final response = await http.post(
+        Uri.parse("http://10.0.2.2:8000/analytics/trigger-ai/$userId/$productId"),
+      );
 
-  double get profitGrowth =>
-      ((profitAfter - profitBefore) / profitBefore) * 100;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // 🌟 核心逻辑：从后端返回的 'data' 字段中提取 AI 分析结果
+        // 假设你的后端返回了包含 ai_insight, conversion_rate 等字段的对象
+        final aiResult = data['data']; 
 
-  double get costReduction =>
-      ((costBefore - costAfter) / costBefore) * 100;
-
-  double get timeSaved =>
-      ((timeBefore - timeAfter) / timeBefore) * 100;
+        setState(() {
+          // 将后端 AI 生成的内容映射到 UI
+          recommendation = aiResult['ai_insight'] ?? "Strategy: Increase marketing exposure.";
+          reasoning = aiResult['ai_reasoning'] ?? "Based on your current sales trend and stock turnover.";
+          
+          // 格式化转化率显示
+          double cr = (aiResult['conversion_rate'] ?? 0.0) * 100;
+          conversionRate = "${cr.toStringAsFixed(2)}%";
+          
+          tradeOff = aiResult['stock_status'] ?? "Balanced";
+          stockStatus = aiResult['stock_status'] == "Low" ? "Reorder Soon" : "Optimal";
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🚀 Intelligence Generated Successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception("Server Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Analysis Failed: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff5f6f8),
-
       appBar: AppBar(
-        title: const Text("Analytics"),
+        title: const Text("AI Business Insights", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        centerTitle: true,
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            /// ================= AI 触发按钮 =================
+            _aiTriggerButton(),
 
-            /// ================= AI RECOMMENDATION =================
+            const SizedBox(height: 24),
+
+            /// ================= 核心指标 (新增展示) =================
             const Text(
-              "🧠 AI Recommendation",
+              "📊 Real-time Performance",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 10),
-
-            _card(
-              icon: Icons.lightbulb,
-              color: Colors.green,
-              title: "Pricing Strategy",
-              desc:
-                  "Increase high-demand product prices by 3–5% to maximize profit.\n\n"
-                  "Restock fast-moving items to avoid stockouts.",
-            ),
-
-            const SizedBox(height: 20),
-
-            /// ================= TRADE OFF =================
-            const Text(
-              "⚖️ Trade-Off Analysis",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
             Row(
               children: [
                 Expanded(
                   child: _smallCard(
-                    title: "Price vs Demand",
-                    value: "Balanced ↑",
-                    color: Colors.blue,
+                    title: "Conversion Rate",
+                    value: conversionRate,
+                    color: Colors.deepPurple,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: _smallCard(
-                    title: "Cost vs Profit",
-                    value: "Optimized ↑",
-                    color: Colors.green,
+                    title: "Inventory Status",
+                    value: stockStatus,
+                    color: stockStatus == "Reorder Soon" ? Colors.red : Colors.green,
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 24),
+
+            /// ================= AI RECOMMENDATION =================
+            const Text(
+              "🧠 AI Strategic Action",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            _card(
+              icon: Icons.auto_graph,
+              color: Colors.orange,
+              title: "Recommendation",
+              desc: recommendation,
             ),
 
             const SizedBox(height: 20),
 
             /// ================= EXPLANATION =================
             const Text(
-              "📉 GLM Reasoning",
+              "📉 LLM Reasoning",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 10),
-
             _card(
               icon: Icons.psychology,
               color: Colors.blue,
-              title: "AI Explanation",
-              desc:
-                  "Cost increased due to inflation, but demand remains strong.\n"
-                  "Recommended price adjustment: +8% to maintain margin stability.",
-            ),
-
-            const SizedBox(height: 20),
-
-            /// ================= FORECAST =================
-            const Text(
-              "📈 Forecast",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _smallCard(
-                    title: "Revenue",
-                    value: "+20% ↑",
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _smallCard(
-                    title: "Demand",
-                    value: "+15% ↑",
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _smallCard(
-                    title: "Profit",
-                    value: "+110% ↑",
-                    color: Colors.purple,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            /// ================= IMPACT ANALYSIS =================
-            const Text(
-              "📈 Impact Analysis",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            _impactCard(
-              title: "💥 AI Impact Summary",
-              items: [
-                _impactItem("💰 Revenue", revenueBefore, revenueAfter,
-                    "+${revenueGrowth.toStringAsFixed(0)}%"),
-                _impactItem("💵 Profit", profitBefore, profitAfter,
-                    "+${profitGrowth.toStringAsFixed(0)}%"),
-                _impactItem("💸 Cost", costBefore, costAfter,
-                    "-${costReduction.toStringAsFixed(0)}%"),
-                _impactItem("⏱ Time Saved", timeBefore, timeAfter,
-                    "-${timeSaved.toStringAsFixed(0)}%"),
-              ],
+              title: "Why this works?",
+              desc: reasoning,
             ),
           ],
         ),
@@ -180,34 +153,73 @@ class Analytics extends StatelessWidget {
     );
   }
 
-  // ================= CARD =================
-  Widget _card({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String desc,
-  }) {
+  // --- UI 组件保持简洁漂亮 ---
+
+  Widget _aiTriggerButton() {
+    return InkWell(
+      onTap: _isLoading ? null : _triggerAI,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: _isLoading 
+                ? [Colors.grey, Colors.blueGrey] 
+                : [const Color(0xFF6366F1), const Color(0xFFA855F7)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Center(
+          child: _isLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.bolt, color: Colors.white),
+                    SizedBox(width: 12),
+                    Text(
+                      "ACTIVATE AI ANALYSIS",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required IconData icon, required Color color, required String title, required String desc}) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-          )
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color),
           ),
           const SizedBox(width: 12),
@@ -215,13 +227,9 @@ class Analytics extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueGrey)),
                 const SizedBox(height: 6),
-                Text(desc,
-                    style: const TextStyle(
-                        color: Colors.black87, fontSize: 13, height: 1.4)),
+                Text(desc, style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.5)),
               ],
             ),
           )
@@ -230,82 +238,22 @@ class Analytics extends StatelessWidget {
     );
   }
 
-  // ================= SMALL CARD =================
-  Widget _smallCard({
-    required String title,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ================= IMPACT CARD =================
-  Widget _impactCard({
-    required String title,
-    required List<Widget> items,
-  }) {
+  Widget _smallCard({required String title, required String value, required Color color}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFE0F2FE), Color(0xFFEEF2FF)],
-        ),
+        color: Colors.white, 
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 10),
-          ...items,
-        ],
-      ),
-    );
-  }
-
-  Widget _impactItem(
-    String label,
-    double before,
-    double after,
-    String change,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(
-            "$before → $after  ($change)",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
         ],
       ),
     );
   }
 }
-

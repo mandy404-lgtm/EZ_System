@@ -280,4 +280,25 @@ class ApiService {
       return [];
     }
   }
+
+  static Future<bool> triggerZaiIntelligence(String userId, String productId) async {
+  try {
+    // 注意：这里的 URL 必须和你 FastAPI 后端的路由一致
+    final response = await http.post(
+      Uri.parse("$baseUrl/analytics/trigger-ai/$userId/$productId"),
+      headers: {"Content-Type": "application/json"},
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      print("ZAI Server Error: ${response.body}");
+      return false;
+    }
+  } catch (e) {
+    print("Connection Error: $e");
+    return false;
+  }
+}
+
 }
