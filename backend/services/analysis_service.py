@@ -16,15 +16,34 @@ def update_ai_summary_table(engine, user_id, product_id=None):
                        p.cost_price AS cost, p.selling_price, 10 as reorder_level 
                 FROM products p 
                 LEFT JOIN stock s ON p.product_id = s.product_id 
-                WHERE p.product_id = :pid AND p.user_id = :uid
+                WHERE p.product_id = :pid   AND p.user_id = :uid
             """), conn, params={"pid": product_id, "uid": user_id})
             
-            # 获取销售数据 (已经对应你数据库新增的 quantity 字段)
+            # ... 前面获取 inventory 的代码保持不变 ...
+
+            # --- 将下面这段代码替换你原本的 sales_data 获取逻辑 ---
+            
+            print(f"\n🔍 [DEBUG START] Target PID: {product_id}, UID: {user_id}")
+
+            # 探测 1：全表扫描（看数据库里到底有没有 sales 记录）
+            check_all = pd.read_sql(text("SELECT count(*) as cnt FROM sales"), conn)
+            print(f"DEBUG 1 (Total Sales in DB): {check_all.iloc[0]['cnt']}")
+
+            # 探测 2：只查产品（看是不是 UID 没对上）
+            check_pid = pd.read_sql(text("SELECT count(*) as cnt FROM sales WHERE product_id = :pid"), 
+                                   conn, params={"pid": product_id})
+            print(f"DEBUG 2 (Sales for this PID): {check_pid.iloc[0]['cnt']}")
+
+            # 探测 3：原始精准查询
             sales_data = pd.read_sql(text("""
                 SELECT product_id, selling_price as item_price, quantity 
                 FROM sales 
                 WHERE product_id = :pid AND user_id = :uid
             """), conn, params={"pid": product_id, "uid": user_id})
+            
+            print(f"DEBUG 3 (Final Result): Found {len(sales_data)} records\n")
+
+            # --- 替换结束，后面继续接 reviews = pd.DataFrame... ---
             
             print(f"DEBUG: Found {len(sales_data)} sale records for product {product_id}")
             print(f"DEBUG: Sum of quantity in SQL result: {sales_data['quantity'].sum()}")
@@ -33,7 +52,15 @@ def update_ai_summary_table(engine, user_id, product_id=None):
             cpi = pd.DataFrame({"cpi_value": [1.83]})
             ppi = pd.DataFrame({"ppi_value": [119.60]})
 
-        if inventory.empty: return None # 修改：返回 None 表示没找到数据
+        # Only return None if product doesn't exist in database
+        if inventory.empty: 
+            print(f"⚠️ Product {product_id} not found in database")
+            return None
+        
+        # Handle empty sales_data - create empty DataFrame with correct columns
+        if sales_data.empty:
+            print(f"⚠️ No sales records for product {product_id}, using empty data (new product)")
+            sales_data = pd.DataFrame(columns=["product_id", "item_price", "quantity"])
 
         # 计算基础指标 (Margin, Total Sales 等)
         df_final = build_ai_summary(
@@ -70,17 +97,13 @@ def update_ai_summary_table(engine, user_id, product_id=None):
         return None
     
 def request_zai_analysis(engine, user_id, product_id, product_stats):
-    """
-    专门负责：Call AI 接口 -> 获取结果 -> 写入数据库更新
-    """
     print(f"🚀 Initiating Cloud AI Analysis for: {product_id}")
     
-    # 这一步是真正的网络请求
     ai_res = get_zai_intelligence(product_stats)
     
     if ai_res:
         with engine.begin() as conn:
-            # 这一步是将 AI 的深度建议存回你截图中的那些字段
+            # 💡 这里必须是更新 ai_product_summary 表，而不是全店表！
             conn.execute(text("""
                 UPDATE ai_product_summary SET 
                     ai_recommendation = :rec,
@@ -97,15 +120,98 @@ def request_zai_analysis(engine, user_id, product_id, product_stats):
                 "imp": ai_res.get('impact_summary'),
                 "pid": product_id, "uid": user_id
             })
-        print(f"✅ AI Analysis fields updated in database.")
+        print(f"✅ Product analysis updated for {product_id}.")
         return True
     return False
+
+def update_store_wide_analysis(engine, user_id):
+    print(f"📊 [Global Deep-Dive] Aggregating all products for User: {user_id}")
+    
+    try:
+        # 1. 逻辑升级：获取该用户下所有产品的具体明细
+        with engine.connect() as conn:
+            # 聚合全局宏观指标 (用于 Prompt 概览)
+            macro_query = text("""
+                SELECT 
+                    COUNT(product_id) as total_products,
+                    IFNULL(SUM(total_sales), 0) as grand_total_sales,
+                    IFNULL(SUM(total_revenue), 0) as grand_total_revenue,
+                    IFNULL(AVG(profit_margin), 0) as avg_store_margin
+                FROM ai_product_summary 
+                WHERE user_id = :uid
+            """)
+            macro_stats = conn.execute(macro_query, {"uid": user_id}).mappings().first()
+
+            # 获取所有单品的明细 (用于 AI 深度关联分析)
+            detail_query = text("""
+                SELECT product_name, total_sales, profit_margin, conversion_rate, current_stock
+                FROM ai_product_summary 
+                WHERE user_id = :uid
+            """)
+            products = conn.execute(detail_query, {"uid": user_id}).mappings().all()
+            
+            # 转换成 AI 容易理解的紧凑列表格式
+            product_list_for_ai = [dict(p) for p in products]
+
+        # 2. 详细程度释放：针对 CFO 角色的深度 Prompt
+        store_prompt = f"""
+        You are a Chief Financial Officer (CFO). Perform a Deep Dive Analysis of the entire product portfolio:
+        
+        [SHOP OVERVIEW]
+        - Total Products: {macro_stats['total_products']}
+        - Total Revenue: RM{macro_stats['grand_total_revenue']:.2f}
+        - Avg Margin: {float(macro_stats['avg_store_margin'])*100:.2f}%
+        
+        [PRODUCT DATA CLOUD]
+        {json.dumps(product_list_for_ai)}
+
+        TASK:
+        Identify correlations between high-margin/low-sale items and low-margin/high-sale items.
+        Provide a 30-day strategic roadmap.
+        
+        OUTPUT FORMAT (JSON ONLY):
+        {{
+          "overall_summary": "Extremely detailed professional evaluation...",
+          "inventory_strategy": "Strategic roadmap for stock and procurement...",
+          "financial_score": (Number 0-100)
+        }}
+        """
+
+        # 3. 发送给 AI
+        ai_res = get_zai_intelligence_for_store(store_prompt)
+
+        # 4. 储存策略：存入 store_wide_analysis 表
+        if ai_res:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO store_wide_analysis 
+                    (user_id, overall_summary, inventory_strategy, financial_health_score)
+                    VALUES (:uid, :summary, :strategy, :score)
+                    ON DUPLICATE KEY UPDATE 
+                        overall_summary = :summary,
+                        inventory_strategy = :strategy,
+                        financial_health_score = :score,
+                        updated_at = CURRENT_TIMESTAMP
+                """), {
+                    "uid": user_id,
+                    "summary": ai_res.get('overall_summary'),
+                    "strategy": ai_res.get('inventory_strategy'),
+                    "score": ai_res.get('financial_score')
+                })
+            print(f"✅ CFO Level Global analysis for {user_id} saved.")
+            return True
+        return False
+
+    except Exception as e:
+        print(f"❌ CFO Analysis Error: {e}")
+        traceback.print_exc()
+        return False
     
 def get_zai_intelligence(stats):
     print("DEBUG: Initiating ZAI API Request...")
     
     # 1. 基础配置
-    API_KEY = "sk-2c158f7f07e6f5d8025e904dd7de3e35b3633b4c0dfac1df".strip() 
+    API_KEY = "_APIKEY_".strip() 
     # 💡 检查点：确保 URL 正确，有些 API 不需要 /anthropic 路径，取决于 ilmu.ai 的文档
     API_URL = "https://api.ilmu.ai/anthropic/v1/messages" 
 
@@ -183,4 +289,39 @@ def get_zai_intelligence(stats):
         return None
     except Exception as e:
         print(f"❌ ZAI API Request failed: {e}")
+        return None
+    
+def get_zai_intelligence_for_store(prompt_text):
+    """
+    专门为全店 CEO 报告设计的 AI 请求函数
+    """
+    API_KEY = "_APIKEY_".strip()
+    API_URL = "https://api.ilmu.ai/anthropic/v1/messages"
+    
+    headers = {
+        "x-api-key": API_KEY,
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+    }
+
+    payload = {
+        "model": "ilmu-glm-5.1",
+        "messages": [{"role": "user", "content": prompt_text}],
+        "max_tokens": 2048,
+        "temperature": 0.3 # CEO 报告需要更稳重，降低随机性
+    }
+
+    try:
+        # verify=False 应对比赛现场可能的网络限制
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=120, verify=False)
+        if response.status_code == 200:
+            raw_text = response.json()['content'][0]['text']
+            # 清洗可能的 Markdown 标签
+            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_json)
+        print(f"❌ CEO AI API Error: {response.text}")
+        return None
+    except Exception as e:
+        print(f"❌ CEO AI Request Failed: {e}")
         return None
