@@ -4,8 +4,7 @@ Intelligent E-Commerce System
 EZ_System built through Flutter FastAPI MySQL ILMU AI (GLM-5.1)
 
 Project Overview
-
-Developed for UMHackathon 2026, Z.AI is a sophisticated decision-support tool
+Developed for UMHackathon 2026, EZ_System is a sophisticated decision-support tool
 designed to empower SME owners. It bridges the gap between raw operational data
 and strategic growth by utilizing the ILMU GLM-5.1 engine to provide real-time
 inventory alerts, sales forecasting, and comprehensive CEO-level strategic reports.
@@ -31,7 +30,7 @@ synchronization between mobile updates and the centralized database.
 Installation & Setup
 # Backend Setup
 - Clone the repository : 
-git clone https://github.com/your-repo/z-ai-sme.git
+git clone https://github.com/mandy404-lgtm/EZ_System.git
 - Install dependencies : 
 pip install fastapi uvicorn sqlalchemy pymysql requests numpy
 - Run the server : 
