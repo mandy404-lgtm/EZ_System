@@ -1,7 +1,9 @@
+import json
 import sys
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from numpy import rint
 from sqlalchemy import text
 from pydantic import BaseModel
 from services.analysis_service import request_zai_analysis, update_ai_summary_table
@@ -367,64 +369,89 @@ async def trigger_store_ceo_report(user_id: str):
                 WHERE user_id = :uid
             """), {"uid": user_id}).mappings().first()
 
-        # 2. 构造 Prompt (已根据你的要求加强了详细度)
+        # 2. 构造 Prompt
         detailed_prompt = f"""
-        Act as a professional CEO Strategic Advisor. Analyze the performance for Store ID: {user_id}.
-        
-        DATA SNAPSHOT:
-        - Total Units Sold: {store_stats['grand_sales']}
-        - Total Estimated Profit: RM{store_stats['grand_profit']:.2f}
-        - Inventory Status: {store_stats['low_stock_alerts']} critical low-stock alerts.
-        - Best Seller: {store_stats['hero_product'] or 'N/A'}
+        Act as a Strategic CEO Advisor. Analyze this store data: {store_stats}.
+        Return a raw JSON object with the following keys:
+        - overall_summary: A 3-sentence executive overview.
+        - top_performer_id: The ID or name of the best product.
+        - underperformer_id: The ID or name of the product needing improvement.
+        - inventory_strategy: 1-2 actionable steps for stock management.
+        - financial_health_score: An integer (0-100).
+        - market_opportunity: One specific growth area.
 
-        REQUIREMENTS:
-        Write a comprehensive strategic report including:
-        1. EXECUTIVE SUMMARY: A 3-4 sentence overview of current business health.
-        2. OPERATIONAL ANALYSIS: Insight on inventory risks and top product performance.
-        3. GROWTH STRATEGY: Specific advice on how to increase profit margins.
-        4. FINANCIAL SCORE: Provide a score between 0-100 based on the data.
-
-        Keep the tone executive and data-driven.
+        Do not include any markdown formatting, just the raw JSON.
         """
 
         # 3. 调用 AI 函数
         ai_raw_response = get_zai_intelligence_for_store(detailed_prompt)
         
-        # 🌟 关键点：解析 AI 返回的文本 (假设返回的是 Anthropic/ZAI 结构)
-        # 根据你之前的函数，ai_raw_response 应该是 response.json()
-       # 2. 解析文本 (确保你拿到的是 String)
-        if ai_raw_response and 'content' in ai_raw_response and len(ai_raw_response['content']) > 0:
-            report_content = ai_raw_response['content'][0]['text']
-        else:
-            report_content = "Failed to generate report from AI."
+        print(f"DEBUG: AI Raw Response Type: {type(ai_raw_response)}")
+        print(f"DEBUG: AI Raw Response Content: {ai_raw_response}")
 
-        # 🌟 4. 将回复保存进 store_wide_analysis 数据库
+        # 4. 解析并入库
         try:
+            raw_text = ai_raw_response['content'][0]['text']
+            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+            data_dict = json.loads(clean_json)
+
+            if not raw_text.strip():
+        # 🌟 如果 AI 回了空内容，手动制造一个默认 JSON，防止报错
+                print("⚠️ AI returned empty string. Using fallback data.")
+                data_dict = {
+                    "overall_summary": "System is generating report...",
+                    "top_performer_id": "Calculating...",
+                    "underperformer_id": "Calculating...",
+                    "inventory_strategy": "Review stock levels.",
+                    "financial_health_score": 0,
+                    "market_opportunity": "Analyzing market..."
+                }
+            else:
+                clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+                data_dict = json.loads(clean_json)
+
             with engine.begin() as conn:
                 conn.execute(text("""
-                    INSERT INTO store_wide_analysis (user_id, report_text, health_score)
-                    VALUES (:uid, :report, :score)
+                    INSERT INTO store_wide_analysis (
+                        user_id, overall_summary, top_performer_id, underperformer_id, 
+                        inventory_strategy, financial_health_score, market_opportunity, last_updated
+                    )
+                    VALUES (:uid, :summary, :top, :under, :strategy, :score, :opp, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        overall_summary = VALUES(overall_summary),
+                        top_performer_id = VALUES(top_performer_id),
+                        underperformer_id = VALUES(underperformer_id),
+                        inventory_strategy = VALUES(inventory_strategy),
+                        financial_health_score = VALUES(financial_health_score),
+                        market_opportunity = VALUES(market_opportunity),
+                        last_updated = NOW()
                 """), {
                     "uid": user_id,
-                    "report": report_content,
-                    "score": 88  # 你可以暂时固定，或尝试从 report_content 中用正则提取
+                    "summary": data_dict.get('overall_summary'),
+                    "top": str(data_dict.get('top_performer_id')),
+                    "under": str(data_dict.get('underperformer_id')),
+                    "strategy": data_dict.get('inventory_strategy'),
+                    "score": int(data_dict.get('financial_health_score')),
+                    "opp": data_dict.get('market_opportunity')
                 })
-            print(f"✅ Success: Report saved to store_wide_analysis for {user_id}")
-        except Exception as db_err:
-            print(f"❌ Database Save Error: {db_err}")
-            # 即使数据库存失败了，我们仍然把报告给前端，不影响演示
-
-        # 5. 返回数据给 Flutter
-        return {
-            "status": "success",
-            "data": {
-                "overall_summary": report_content,
-                "financial_health_score": 88
+            print(f"✅ Full Report successfully saved to DB for User: {user_id}")
+            
+            # 5. 🌟 关键：返回给前端的数据结构
+            # 这里的 Key 必须和 Flutter 里的解析代码保持一致
+            return {
+                "status": "success",
+                "data": data_dict 
             }
-        }
+
+        except Exception as parse_err:
+            print(f"❌ Parsing/DB Error: {parse_err}")
+            return {
+                "status": "error", 
+                "message": "AI returned invalid format, but check logs for raw content."
+            }
 
     except Exception as e:
-        print(f"STORE AI ERROR: {e}")
+        print(f"❌ STORE AI PIPELINE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/analytics/sync/{user_id}")

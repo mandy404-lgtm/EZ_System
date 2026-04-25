@@ -211,7 +211,7 @@ def get_zai_intelligence(stats):
     print("DEBUG: Initiating ZAI API Request...")
     
     # 1. 基础配置
-    API_KEY = "sk-d396ffcac5dbf6b4c59b200c1589a03e664b882c0cbef0f7".strip() 
+    API_KEY = "_API KEY_".strip() 
     # 💡 检查点：确保 URL 正确，有些 API 不需要 /anthropic 路径，取决于 ilmu.ai 的文档
     API_URL = "https://api.ilmu.ai/anthropic/v1/messages" 
 
@@ -298,7 +298,7 @@ def get_zai_intelligence_for_store(prompt_text):
     from os import getenv
     print(f"🕵️ DEBUG CHECK - API_KEY VALUE: {getenv('ZAI_API_KEY')}")
 
-    API_KEY = "sk-d396ffcac5dbf6b4c59b200c1589a03e664b882c0cbef0f7".strip() 
+    API_KEY = "_API KEY_".strip() 
     url = "https://api.ilmu.ai/anthropic/v1/messages"
     
     headers = {
