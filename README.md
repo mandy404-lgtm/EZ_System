@@ -1,7 +1,8 @@
 # EZ_System
 Z.AI: Intelligent E-Commerce System
-AI-Driven Decision Support for Small-to-Medium Enterprises
-Flutter FastAPI MySQL ILMU AI (GLM-5.1)
+AI-Driven Decision Support for Small-to-Medium Enterprises. 
+EZ_System built through Flutter FastAPI MySQL ILMU AI (GLM-5.1)
+
 Project Overview
 Developed for UMHackathon 2026, Z.AI is a sophisticated decision-support tool
 designed to empower SME owners. It bridges the gap between raw operational data
