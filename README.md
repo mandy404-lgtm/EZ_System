@@ -1,6 +1,5 @@
 # EZ_System
 Z.AI: Intelligent E-Commerce System
-System
 AI-Driven Decision Support for Small-to-Medium Enterprises
 Flutter FastAPI MySQL ILMU AI (GLM-5.1)
 Project Overview
