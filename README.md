@@ -56,3 +56,7 @@ flutter run
 • SQLAlchemy: Database ORM and orchestration.
 
 • Shared Preferences: Local session management for user_id persistence.
+
+# Presentation Link:
+https://drive.google.com/file/d/1Zmh5MqXWBkc45EDMBQXHX7bKocPY0OOw/view?usp=sharing
+
