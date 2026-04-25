@@ -1,10 +1,10 @@
+# Presentation Link:
+https://drive.google.com/file/d/1Zmh5MqXWBkc45EDMBQXHX7bKocPY0OOw/view?usp=sharing
+
 # EZ_System
 Intelligent E-Commerce System
 , AI-Driven Decision Support for Small-to-Medium Enterprises. 
 EZ_System built through Flutter FastAPI MySQL ILMU AI (GLM-5.1)
-
-# Presentation Link:
-https://drive.google.com/file/d/1Zmh5MqXWBkc45EDMBQXHX7bKocPY0OOw/view?usp=sharing
 
 Project Overview : 
 Developed for UMHackathon 2026, EZ_System is a sophisticated decision-support tool
