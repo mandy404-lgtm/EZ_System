@@ -8,17 +8,16 @@ engine = get_engine()
 
 # --- 1. 修复 ImportError: 补回 main.py 需要的仪表盘统计函数 ---
 def get_user_dashboard_data(user_id: str):
-    """计算用户总收入、总成本和利润"""
     try:
         with engine.connect() as conn:
-            # 计算总收入 (从 sales 表)
+            # 1. 修正字段名为 selling_price
             rev_res = conn.execute(
-                text("SELECT SUM(total_price) as total FROM sales WHERE user_id = :uid"), 
-                {"uid": user_id}
+                text("SELECT SUM(selling_price) as total FROM sales WHERE user_id = :uid"), 
+                {"uid": user_id.strip()}
             ).mappings().first()
             revenue = float(rev_res["total"]) if rev_res and rev_res["total"] else 0.0
 
-            # 计算总成本 (需要 JOIN products 获取产品的成本价 cost_price)
+            # 2. 计算总成本
             cost_res = conn.execute(
                 text("""
                     SELECT SUM(s.quantity * p.cost_price) as total 
@@ -26,12 +25,11 @@ def get_user_dashboard_data(user_id: str):
                     JOIN products p ON s.product_id = p.product_id 
                     WHERE s.user_id = :uid
                 """), 
-                {"uid": user_id}
+                {"uid": user_id.strip()}
             ).mappings().first()
             cost = float(cost_res["total"]) if cost_res and cost_res["total"] else 0.0
 
             return {
-                "user_id": user_id,
                 "revenue": revenue,
                 "cost": cost,
                 "profit": revenue - cost
@@ -121,15 +119,18 @@ def build_ai_summary(order_items, reviews, cpi, ppi, products_df):
         "product_id", "product_name", "total_sales", "total_revenue",
         "avg_rating", "avg_selling_price", "estimated_profit",
         "profit_margin", "stock_status", "summary_date",
-        "cost", "selling_price", "current_stock", "total_views"
+        "cost", "selling_price", "current_stock", "total_views",
+        "conversion_rate" # 👈 必须加这一行！
     ]
     
     # 🌟 计算转化率
     # 转化率 = 销量 / 浏览量
 
     print(f"DEBUG: Final DataFrame Columns: {df.columns.tolist()}")
+    # 修复：如果 total_views 为 0，则设为 1，避免分母为 0 导致转化率恒为 0
+    df["total_views"] = df["total_views"].apply(lambda v: v if v > 0 else 1)
     df["conversion_rate"] = df.apply(
-        lambda x: x["total_sales"] / x["total_views"] if x["total_views"] > 0 else 0,
+        lambda x: x["total_sales"] / x["total_views"],
         axis=1
     ).round(4)
 

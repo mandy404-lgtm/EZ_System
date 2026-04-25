@@ -211,7 +211,7 @@ def get_zai_intelligence(stats):
     print("DEBUG: Initiating ZAI API Request...")
     
     # 1. 基础配置
-    API_KEY = "_APIKEY_".strip() 
+    API_KEY = "sk-d396ffcac5dbf6b4c59b200c1589a03e664b882c0cbef0f7".strip() 
     # 💡 检查点：确保 URL 正确，有些 API 不需要 /anthropic 路径，取决于 ilmu.ai 的文档
     API_URL = "https://api.ilmu.ai/anthropic/v1/messages" 
 
@@ -295,33 +295,37 @@ def get_zai_intelligence_for_store(prompt_text):
     """
     专门为全店 CEO 报告设计的 AI 请求函数
     """
-    API_KEY = "_APIKEY_".strip()
-    API_URL = "https://api.ilmu.ai/anthropic/v1/messages"
+    from os import getenv
+    print(f"🕵️ DEBUG CHECK - API_KEY VALUE: {getenv('ZAI_API_KEY')}")
+
+    API_KEY = "sk-d396ffcac5dbf6b4c59b200c1589a03e664b882c0cbef0f7".strip() 
+    url = "https://api.ilmu.ai/anthropic/v1/messages"
     
     headers = {
-        "x-api-key": API_KEY,
-        "Authorization": f"Bearer {API_KEY}",
+        "x-api-key": API_KEY,           # 🌟 必须是这个键名
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01"
+        "anthropic-version": "2023-06-01" # 🌟 访问 Anthropic 路径必须带版本号
     }
+    
+    # 🚀 加入以下三行调试代码
+    print("\n" + "="*50)
+    print(f"DEBUG: Final Headers Sent to ILMU: {headers}")
+    print("="*50 + "\n")
 
     payload = {
         "model": "ilmu-glm-5.1",
-        "messages": [{"role": "user", "content": prompt_text}],
-        "max_tokens": 2048,
-        "temperature": 0.3 # CEO 报告需要更稳重，降低随机性
+        "messages": [
+            {
+                "role": "user", 
+                "content": prompt_text  # 🌟 必须包裹在 messages 列表的字典里
+            }
+        ],
+        "max_tokens": 1024,
     }
-
+    
+    # analysis_service.py 结尾应该是这样的
     try:
-        # verify=False 应对比赛现场可能的网络限制
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=120, verify=False)
-        if response.status_code == 200:
-            raw_text = response.json()['content'][0]['text']
-            # 清洗可能的 Markdown 标签
-            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean_json)
-        print(f"❌ CEO AI API Error: {response.text}")
-        return None
+        response = requests.post(url, json=payload, headers=headers, verify=False)
+        return response.json() # 🌟 确保这里返回的是 dict 而不是 text
     except Exception as e:
-        print(f"❌ CEO AI Request Failed: {e}")
         return None

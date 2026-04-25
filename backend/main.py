@@ -6,8 +6,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from services.analysis_service import request_zai_analysis, update_ai_summary_table
 from pydantic import BaseModel
-from services.analysis_service import update_ai_summary_table, get_zai_intelligence
-
+from services.analysis_service import update_ai_summary_table, get_zai_intelligence_for_store
 
 
 # --- 1. PATH FIX ---
@@ -138,7 +137,7 @@ async def add_new_product(data: dict):
     u_id = data.get("user_id") 
     p_id = data.get("product_id")
 
-    print(f"DEBUG: Syncing for User: {u_id}, Product: {p_id}") # 看看控制台有没有打印这行
+    print(f"DEBUG: Syncing for User: {u_id}, Produ93ct: {p_id}") # 看看控制台有没有打印这行
     
     # 这里的参数顺序：engine, 字符串, 字符串
     update_ai_summary_table(engine, u_id, p_id) 
@@ -315,45 +314,117 @@ async def get_business_alerts(user_id: str):
     
 # --- 在 main.py 中整合 ZAI 调用 ---
 
-# --- 修改后的 trigger_ai_analysis 路由 ---
 @app.post("/analytics/trigger-ai/{user_id}/{product_id}")
 async def trigger_ai_analysis(user_id: str, product_id: str):
     try:
-        # 1. 运行本地计算逻辑 (你刚刚发的代码)
-        # 它会计算销售额、转化率等，并更新数据库基础字段
-        updated_stats = update_ai_summary_table(engine, user_id, product_id)
+        # 1. 先同步基础数据
+        stats = update_ai_summary_table(engine, user_id, product_id)
         
-        if not updated_stats:
-            raise HTTPException(status_code=404, detail="Product not found or failed to update")
+        # 2. 调用你刚刚测通的 ZAI 逻辑
+        # 确保 request_zai_analysis 内部使用的是测试成功的那个 Header 结构
+        request_zai_analysis(engine, user_id, product_id, stats)
 
-        # 2. 核心：发起 ZAI 深度分析并存回数据库
-        # 注意：这里直接传入 updated_stats 字典，避免再次查询数据库
-        ai_success = request_zai_analysis(engine, user_id, product_id, updated_stats)
-
-        # 3. 再次查询数据库，获取最新最全的结果（包含 AI 建议字段）返回给前端
+        # 3. 重新获取数据并精准对接 Flutter 字段名
         with engine.connect() as conn:
-            final_data = conn.execute(text("""
+            row = conn.execute(text("""
                 SELECT * FROM ai_product_summary 
                 WHERE product_id = :pid AND user_id = :uid
             """), {"pid": product_id, "uid": user_id}).mappings().first()
 
+            if not row:
+                raise HTTPException(status_code=404, detail="Data sync failed")
+
+            # 🌟 这里的 Key 必须和你的 Flutter Analytics.dart 里的解析逻辑一模一样
+            return {
+                "status": "success",
+                "data": {
+                    "total_sales": float(row.get('total_sales') or 0),
+                    "total_views": float(row.get('total_views') or 0),
+                    "stock_status": row.get('stock_status') or "Stable",
+                    "recommendation": row.get('ai_recommendation') or "Strategy pending...", 
+                    "glm_reasoning": row.get('glm_reasoning') or "Analyzing history...",
+                    "trade_off_analysis": row.get('trade_off_analysis') or "None",
+                    "forecast_30d": row.get('forecast_30d') or "N/A",
+                    "impact_summary": row.get('impact_summary') or "Stable"
+                }
+            }
+    except Exception as e:
+        print(f"PIPELINE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analytics/trigger-store-ai/{user_id}")
+async def trigger_store_ceo_report(user_id: str):
+    try:
+        # 1. 从数据库搜集全店“干货”
+        with engine.connect() as conn:
+            store_stats = conn.execute(text("""
+                SELECT 
+                    COALESCE(SUM(total_sales), 0) as grand_sales,
+                    COALESCE(SUM(estimated_profit), 0) as grand_profit,
+                    COUNT(CASE WHEN stock_status = 'Low' THEN 1 END) as low_stock_alerts,
+                    (SELECT product_name FROM ai_product_summary WHERE user_id = :uid ORDER BY total_sales DESC LIMIT 1) as hero_product
+                FROM ai_product_summary 
+                WHERE user_id = :uid
+            """), {"uid": user_id}).mappings().first()
+
+        # 2. 构造 Prompt (已根据你的要求加强了详细度)
+        detailed_prompt = f"""
+        Act as a professional CEO Strategic Advisor. Analyze the performance for Store ID: {user_id}.
+        
+        DATA SNAPSHOT:
+        - Total Units Sold: {store_stats['grand_sales']}
+        - Total Estimated Profit: RM{store_stats['grand_profit']:.2f}
+        - Inventory Status: {store_stats['low_stock_alerts']} critical low-stock alerts.
+        - Best Seller: {store_stats['hero_product'] or 'N/A'}
+
+        REQUIREMENTS:
+        Write a comprehensive strategic report including:
+        1. EXECUTIVE SUMMARY: A 3-4 sentence overview of current business health.
+        2. OPERATIONAL ANALYSIS: Insight on inventory risks and top product performance.
+        3. GROWTH STRATEGY: Specific advice on how to increase profit margins.
+        4. FINANCIAL SCORE: Provide a score between 0-100 based on the data.
+
+        Keep the tone executive and data-driven.
+        """
+
+        # 3. 调用 AI 函数
+        ai_raw_response = get_zai_intelligence_for_store(detailed_prompt)
+        
+        # 🌟 关键点：解析 AI 返回的文本 (假设返回的是 Anthropic/ZAI 结构)
+        # 根据你之前的函数，ai_raw_response 应该是 response.json()
+       # 2. 解析文本 (确保你拿到的是 String)
+        if ai_raw_response and 'content' in ai_raw_response and len(ai_raw_response['content']) > 0:
+            report_content = ai_raw_response['content'][0]['text']
+        else:
+            report_content = "Failed to generate report from AI."
+
+        # 🌟 4. 将回复保存进 store_wide_analysis 数据库
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO store_wide_analysis (user_id, report_text, health_score)
+                    VALUES (:uid, :report, :score)
+                """), {
+                    "uid": user_id,
+                    "report": report_content,
+                    "score": 88  # 你可以暂时固定，或尝试从 report_content 中用正则提取
+                })
+            print(f"✅ Success: Report saved to store_wide_analysis for {user_id}")
+        except Exception as db_err:
+            print(f"❌ Database Save Error: {db_err}")
+            # 即使数据库存失败了，我们仍然把报告给前端，不影响演示
+
+        # 5. 返回数据给 Flutter
         return {
             "status": "success",
             "data": {
-                "conversion_rate": final_data['conversion_rate'],
-                "total_sales": final_data['total_sales'],
-                "stock_status": final_data['stock_status'],
-                # 对应 Flutter 里的渲染字段
-                "ai_insight": final_data['ai_recommendation'],
-                "trade_off": final_data['trade_off_analysis'],
-                "ai_reasoning": final_data['glm_reasoning'],
-                "forecast": final_data['forecast_30d'],
-                "impact": final_data['impact_summary']
+                "overall_summary": report_content,
+                "financial_health_score": 88
             }
         }
 
     except Exception as e:
-        print(f"❌ Critical Pipeline Failure: {e}")
+        print(f"STORE AI ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/analytics/sync/{user_id}")
