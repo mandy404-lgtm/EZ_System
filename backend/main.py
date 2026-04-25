@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from services.analysis_service import request_zai_analysis, update_ai_summary_table
 from pydantic import BaseModel
 from services.analysis_service import update_ai_summary_table, get_zai_intelligence_for_store
-
+from services.product_service import get_products_by_user
 
 # --- 1. PATH FIX ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -124,9 +124,12 @@ async def update_user(user_id: str, data: dict):
 
 # --- 6. PRODUCT ROUTES ---
 
+# 后端对应的 GET 路由
 @app.get("/products/{user_id}")
-async def fetch_user_products(user_id: str):
-    return product_service.get_products_by_user(user_id)
+async def get_products(user_id: str):
+    products = get_products_by_user(user_id)
+    print(f"DEBUG: Returning {len(products)} products to Flutter") # 🌟 确认这里是不是最新的数量
+    return products
 
 # main.py 中的相关部分
 @app.post("/products/")

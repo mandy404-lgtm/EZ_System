@@ -35,6 +35,13 @@ class _AnalyticsState extends State<Analytics> {
     _loadProducts();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次页面依赖改变（例如从另一个页面返回）时，尝试重新加载产品列表
+    _loadProducts();
+  }
+
   // ===================== 数据加载逻辑 =====================
 
   Future<void> _loadProducts() async {
@@ -172,6 +179,10 @@ class _AnalyticsState extends State<Analytics> {
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.blue),
+            onPressed: () => _loadProducts(), // 手动点击刷新列表
+          ),
           IconButton(
             icon: _isGlobalLoading
                 ? const SizedBox(
